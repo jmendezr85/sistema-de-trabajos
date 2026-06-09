@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
-
 import '../../models/orden_model.dart';
 import '../../services/pb_service.dart';
 
@@ -13,583 +11,326 @@ class DashboardGerencialView extends StatefulWidget {
 
 class _DashboardGerencialViewState extends State<DashboardGerencialView> {
   final _service = PocketBaseService();
-  late Future<List<Orden>> _ordenesFuture;
-  DateTimeRange? _dateRange;
+  
+  String _searchQuery = '';
+  String _selectedDisenador = 'Todos';
 
-  @override
-  void initState() {
-    super.initState();
-    final hoy = DateTime.now();
-    final hace30Dias = hoy.subtract(const Duration(days: 30));
-    _dateRange = DateTimeRange(start: hace30Dias, end: hoy);
-    _ordenesFuture = _service.obtenerTodasLasOrdenes();
+  String _mapDisenador(String original) {
+    if (original == 'qwf4r7l4ve6nd8e') return 'Ramon';
+    if (original == 'ibct9j81py574o4') return 'Cristian';
+    return original;
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Orden>>(
-      future: _ordenesFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            appBar: AppBar(title: const Text('Dashboard Gerencial')),
-            body: const Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return Scaffold(
-            appBar: AppBar(title: const Text('Dashboard Gerencial')),
-            body: const Center(child: Text('No hay datos disponibles')),
-          );
-        }
-
-        final ordenes = snapshot.data!;
-        final ordenesEnRango = _filtrarPorFecha(ordenes, _dateRange!);
-        final stats = _calcularEstadisticas(ordenes, ordenesEnRango);
-
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Dashboard Gerencial'),
-            elevation: 0,
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Tráfico de Órdenes Asignadas'),
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          // Filter Section
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+            child: Row(
               children: [
-                // Header con selector de fechas
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Período: ${_formatDate(_dateRange!.start)} - ${_formatDate(_dateRange!.end)}',
-                      style: Theme.of(context).textTheme.bodyLarge,
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    decoration: InputDecoration(
+                      labelText: 'Buscar por Nombre o Teléfono',
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      isDense: true,
                     ),
-                    ElevatedButton.icon(
-                      onPressed: () => _seleccionarFechas(context),
-                      icon: const Icon(Icons.calendar_today),
-                      label: const Text('Filtros'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                // KPIs en fila
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _KpiCard(
-                        title: 'Ingresos',
-                        value: _formatCurrency(stats['ingresos'] as double),
-                        icon: Icons.trending_up,
-                        color: Theme.of(context).colorScheme.primary,
-                        variation: stats['variacionIngresos'] as double,
-                      ),
-                      const SizedBox(width: 16),
-                      _KpiCard(
-                        title: 'Costos',
-                        value: _formatCurrency(stats['costos'] as double),
-                        icon: Icons.production_quantity_limits,
-                        color: Theme.of(context).colorScheme.secondary,
-                        variation: stats['variacionCostos'] as double,
-                      ),
-                      const SizedBox(width: 16),
-                      _KpiCard(
-                        title: 'Utilidad',
-                        value: _formatCurrency(stats['utilidad'] as double),
-                        icon: Icons.attach_money,
-                        color: Colors.green,
-                        variation: stats['variacionUtilidad'] as double,
-                      ),
-                      const SizedBox(width: 16),
-                      _KpiCard(
-                        title: 'Margen',
-                        value: '${(stats['margen'] as double).toStringAsFixed(1)}%',
-                        icon: Icons.percent,
-                        color: Colors.blue,
-                        variation: 0,
-                      ),
-                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value.toLowerCase();
+                      });
+                    },
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 1,
+                  child: StreamBuilder<List<Orden>>(
+                    stream: _service.listenTodasLasOrdenesActivas(),
+                    builder: (context, snapshot) {
+                      // Derive unique designers from the current active orders
+                      final data = snapshot.data ?? [];
+                      final disenadoresSet = <String>{'Todos'};
+                      for (var o in data) {
+                        if (o.disenador.isNotEmpty) {
+                          disenadoresSet.add(_mapDisenador(o.disenador));
+                        }
+                      }
+                      final disenadoresList = disenadoresSet.toList()..sort();
+                      
+                      // Ensure selected value is in the list
+                      if (!disenadoresList.contains(_selectedDisenador)) {
+                        _selectedDisenador = 'Todos';
+                      }
 
-                // Gráficas principales
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Gráfica Ingresos vs Costos
-                    Expanded(
-                      flex: 2,
-                      child: Card(
-                        elevation: 2,
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Ingresos vs Costos',
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              SizedBox(
-                                height: 300,
-                                child: _GraficoIngresosCostosWidget(stats: stats),
-                              ),
-                            ],
+                      return DropdownButtonFormField<String>(
+                        initialValue: _selectedDisenador,
+                        decoration: InputDecoration(
+                          labelText: 'Filtrar por Diseñador',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
                           ),
+                          isDense: true,
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-
-                    // Dinero en la Calle
-                    Expanded(
-                      flex: 1,
-                      child: Card(
-                        elevation: 2,
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Dinero en la Calle',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              SizedBox(
-                                height: 220,
-                                child: _MedidorDineroEnCalleWidget(stats: stats),
-                              ),
-                              const SizedBox(height: 16),
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  'Total: ${_formatCurrency(stats['dineroEnCalle'] as double)}',
-                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                    color: Colors.orange,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                        items: disenadoresList.map((d) {
+                          return DropdownMenuItem(
+                            value: d,
+                            child: Text(d),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedDisenador = value ?? 'Todos';
+                          });
+                        },
+                      );
+                    }
+                  ),
                 ),
-                const SizedBox(height: 24),
+              ],
+            ),
+          ),
+          
+          // Header Row
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 1)),
+            ),
+            child: const Row(
+              children: [
+                Expanded(flex: 1, child: Text('OT No.', style: TextStyle(fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Text('Cliente', style: TextStyle(fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Text('Teléfono', style: TextStyle(fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Text('Diseñador', style: TextStyle(fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: Text('Estado', style: TextStyle(fontWeight: FontWeight.bold)))),
+              ],
+            ),
+          ),
 
-                // Top Diseñadores
-                Card(
-                  elevation: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
+          // Data Table
+          Expanded(
+            child: StreamBuilder<List<Orden>>(
+              stream: _service.listenTodasLasOrdenesActivas(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          'Top Diseñadores por Utilidad',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          height: 320,
-                          child: _RankingDiseniadoresWidget(stats: stats),
-                        ),
+                        const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                        const SizedBox(height: 16),
+                        Text('Error al cargar órdenes: ${snapshot.error}'),
                       ],
                     ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+                  );
+                }
 
-  Future<void> _seleccionarFechas(BuildContext context) async {
-    final rango = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      initialDateRange: _dateRange,
-    );
-    if (rango != null) {
-      setState(() {
-        _dateRange = rango;
-      });
-    }
-  }
+                final todasLasOrdenes = snapshot.data ?? [];
 
-  List<Orden> _filtrarPorFecha(List<Orden> ordenes, DateTimeRange rango) {
-    return ordenes.where((o) {
-      final fecha = o.created;
-      return fecha.isAfter(rango.start) && 
-             fecha.isBefore(rango.end.add(const Duration(days: 1)));
-    }).toList();
-  }
+                // Apply Filters
+                final ordenesFiltradas = todasLasOrdenes.where((orden) {
+                  // Search query filter
+                  final clienteStr = orden.cliente.toLowerCase();
+                  final matchesSearch = _searchQuery.isEmpty || clienteStr.contains(_searchQuery);
+                  
+                  // Designer filter
+                  final mappedDisenador = _mapDisenador(orden.disenador);
+                  final matchesDisenador = _selectedDisenador == 'Todos' || mappedDisenador == _selectedDisenador;
 
-  Map<String, dynamic> _calcularEstadisticas(List<Orden> todasLasOrdenes, List<Orden> ordenesRango) {
-    double ingresosCurrent = 0;
-    double costosCurrent = 0;
-    double dineroEnCalle = 0;
-    final disenadoresData = <String, Map<String, dynamic>>{};
+                  return matchesSearch && matchesDisenador;
+                }).toList();
 
-    for (final orden in ordenesRango) {
-      final ingresos = orden.monto;
-      final costos = (orden.costoMaterial ?? 0) + (orden.costoPloteo ?? 0);
-      final utilidad = ingresos - costos;
+                if (ordenesFiltradas.isEmpty) {
+                  return const Center(
+                    child: Text('No se encontraron órdenes con los filtros actuales.'),
+                  );
+                }
 
-      ingresosCurrent += ingresos;
-      costosCurrent += costos;
+                return ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: ordenesFiltradas.length,
+                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final orden = ordenesFiltradas[index];
+                    
+                    String displayTicket = orden.ticketLabel;
+                    if (orden.ticketNo < 0 || orden.ticketNo > 999999) {
+                      displayTicket = 'TMP-${(index + 1).toString().padLeft(3, '0')}';
+                    }
+                    
+                    // Separar Nombre y Teléfono (formato esperado: "Nombre / Teléfono")
+                    String nombre = orden.cliente;
+                    String telefono = '';
+                    if (orden.cliente.contains(' / ')) {
+                      final parts = orden.cliente.split(' / ');
+                      nombre = parts[0].trim();
+                      if (parts.length > 1) {
+                        telefono = parts[1].trim();
+                      }
+                    }
 
-      if (orden.estado == 'Pendiente') {
-        dineroEnCalle += orden.saldoPendiente;
-      }
+                    final String designerName = _mapDisenador(orden.disenador);
+                    final bool isRamon = designerName.toLowerCase().contains('ramon') || designerName.toLowerCase().contains('ramón');
+                    final bool isCristian = designerName.toLowerCase().contains('cristian');
+                    
+                    final Color accentColor = isRamon ? Colors.blue : (isCristian ? Colors.orange : Colors.grey);
+                    final Color bgColor = isRamon ? Colors.blue.withValues(alpha: 0.05) : (isCristian ? Colors.orange.withValues(alpha: 0.05) : Colors.transparent);
 
-      final disenador = orden.disenador.trim().isEmpty ? 'Sin Diseñador' : orden.disenador.trim();
-      disenadoresData.putIfAbsent(disenador, () => {'utilidad': 0.0, 'ordenes': 0});
-      disenadoresData[disenador]!['utilidad'] = (disenadoresData[disenador]!['utilidad'] as double) + utilidad;
-      disenadoresData[disenador]!['ordenes'] = (disenadoresData[disenador]!['ordenes'] as int) + 1;
-    }
-
-    // Período anterior
-    final periodoAnterior = DateTimeRange(
-      start: _dateRange!.start.subtract(Duration(days: _dateRange!.end.difference(_dateRange!.start).inDays)),
-      end: _dateRange!.start,
-    );
-    final ordenesAnterior = _filtrarPorFecha(todasLasOrdenes, periodoAnterior);
-
-    double ingresosAnterior = 0;
-    double costosAnterior = 0;
-    for (final orden in ordenesAnterior) {
-      ingresosAnterior += orden.monto;
-      costosAnterior += (orden.costoMaterial ?? 0) + (orden.costoPloteo ?? 0);
-    }
-
-    final utilidadActual = ingresosCurrent - costosCurrent;
-    final utilidadAnterior = ingresosAnterior - costosAnterior;
-    final margen = ingresosCurrent > 0 ? (utilidadActual / ingresosCurrent) * 100 : 0.0;
-
-    final variacionIngresos = ingresosAnterior > 0 ? ((ingresosCurrent - ingresosAnterior) / ingresosAnterior) * 100 : 0.0;
-    final variacionCostos = costosAnterior > 0 ? ((costosCurrent - costosAnterior) / costosAnterior) * 100 : 0.0;
-    final variacionUtilidad = utilidadAnterior > 0 ? ((utilidadActual - utilidadAnterior) / utilidadAnterior) * 100 : 0.0;
-
-    final topDisenadores = disenadoresData.entries.toList()
-      ..sort((a, b) => (b.value['utilidad'] as double).compareTo(a.value['utilidad'] as double));
-
-    return {
-      'ingresos': ingresosCurrent,
-      'costos': costosCurrent,
-      'utilidad': utilidadActual,
-      'margen': margen,
-      'dineroEnCalle': dineroEnCalle,
-      'topDisenadores': topDisenadores.take(5).toList(),
-      'variacionIngresos': variacionIngresos,
-      'variacionCostos': variacionCostos,
-      'variacionUtilidad': variacionUtilidad,
-    };
-  }
-
-  String _formatDate(DateTime fecha) {
-    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-    return '${fecha.day.toString().padLeft(2, '0')} ${meses[fecha.month - 1]} ${fecha.year}';
-  }
-
-  String _formatCurrency(double value) {
-    if (value >= 1000000) return '\$${(value / 1000000).toStringAsFixed(1)}M';
-    if (value >= 1000) return '\$${(value / 1000).toStringAsFixed(0)}K';
-    return '\$${value.toStringAsFixed(0)}';
-  }
-}
-
-class _KpiCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final double variation;
-
-  const _KpiCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.color,
-    required this.variation,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isPositive = variation >= 0;
-
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: color.withValues(alpha: 0.2), shape: BoxShape.circle),
-                child: Icon(icon, color: color, size: 20),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (variation != 0)
-            Row(
-              children: [
-                Icon(
-                  isPositive ? Icons.trending_up : Icons.trending_down,
-                  color: isPositive ? Colors.green : Colors.red,
-                  size: 14,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${isPositive ? '+' : ''}${variation.toStringAsFixed(2)}%',
-                  style: TextStyle(
-                    color: isPositive ? Colors.green : Colors.red,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GraficoIngresosCostosWidget extends StatelessWidget {
-  final Map<String, dynamic> stats;
-
-  const _GraficoIngresosCostosWidget({required this.stats});
-
-  @override
-  Widget build(BuildContext context) {
-    final ingresos = (stats['ingresos'] as double) / 1000000;
-    final costos = (stats['costos'] as double) / 1000000;
-    final maxY = (ingresos * 1.3).clamp(0.0, double.infinity);
-
-    return BarChart(
-      BarChartData(
-        alignment: BarChartAlignment.spaceAround,
-        maxY: maxY,
-        barGroups: [
-          BarChartGroupData(
-            x: 0,
-            barRods: [
-              BarChartRodData(
-                toY: ingresos,
-                color: Theme.of(context).colorScheme.primary,
-                width: 48,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-              ),
-            ],
-          ),
-          BarChartGroupData(
-            x: 1,
-            barRods: [
-              BarChartRodData(
-                toY: costos,
-                color: Theme.of(context).colorScheme.secondary,
-                width: 48,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-              ),
-            ],
-          ),
-        ],
-        titlesData: FlTitlesData(
-          show: true,
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) {
-                if (value == 0) return const Text('Ingresos');
-                if (value == 1) return const Text('Costos');
-                return const Text('');
-              },
-            ),
-          ),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) => Text('${value.toStringAsFixed(1)}M'),
-              reservedSize: 50,
-            ),
-          ),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        borderData: FlBorderData(show: false),
-        gridData: const FlGridData(show: false),
-      ),
-    );
-  }
-}
-
-class _MedidorDineroEnCalleWidget extends StatelessWidget {
-  final Map<String, dynamic> stats;
-
-  const _MedidorDineroEnCalleWidget({required this.stats});
-
-  @override
-  Widget build(BuildContext context) {
-    final dinero = (stats['dineroEnCalle'] as double) / 1000000;
-    final maxY = (dinero * 1.5).clamp(0.0001, double.infinity);
-
-    return BarChart(
-      BarChartData(
-        alignment: BarChartAlignment.center,
-        maxY: maxY,
-        barGroups: [
-          BarChartGroupData(
-            x: 0,
-            barRods: [
-              BarChartRodData(
-                toY: dinero,
-                color: Colors.orange,
-                width: 60,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-              ),
-            ],
-          ),
-        ],
-        titlesData: FlTitlesData(
-          show: true,
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) => const Text('Pendiente'),
-            ),
-          ),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) => Text('${value.toStringAsFixed(1)}M'),
-              reservedSize: 50,
-            ),
-          ),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        borderData: FlBorderData(show: false),
-        gridData: const FlGridData(show: false),
-      ),
-    );
-  }
-}
-
-class _RankingDiseniadoresWidget extends StatelessWidget {
-  final Map<String, dynamic> stats;
-
-  const _RankingDiseniadoresWidget({required this.stats});
-
-  @override
-  Widget build(BuildContext context) {
-    final topDisenadores = stats['topDisenadores'] as List<MapEntry<String, Map<String, dynamic>>>;
-
-    if (topDisenadores.isEmpty) {
-      return const Center(child: Text('Sin datos'));
-    }
-
-    final colors = [Colors.amber, Colors.grey, Colors.orange, Colors.lightBlue, Colors.pink];
-
-    return BarChart(
-      BarChartData(
-        alignment: BarChartAlignment.spaceEvenly,
-        maxY: (topDisenadores.first.value['utilidad'] as double) / 1000000 * 1.1,
-        barGroups: List.generate(
-          topDisenadores.length,
-          (index) {
-            final utilidad = topDisenadores[index].value['utilidad'] as double;
-            return BarChartGroupData(
-              x: index,
-              barRods: [
-                BarChartRodData(
-                  toY: utilidad / 1000000,
-                  color: colors[index % colors.length],
-                  width: 16,
-                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(6)),
-                ),
-              ],
-            );
-          },
-        ),
-        titlesData: FlTitlesData(
-          show: true,
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) {
-                final index = value.toInt();
-                if (index < 0 || index >= topDisenadores.length) return const Text('');
-                final nombre = topDisenadores[index].key;
-                return Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    nombre.length > 10 ? '${nombre.substring(0, 10)}...' : nombre,
-                    style: const TextStyle(fontSize: 11),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    return Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        border: Border(
+                          left: BorderSide(
+                            color: isRamon || isCristian ? accentColor : Colors.transparent,
+                            width: 4.0,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          // OT No.
+                          Expanded(
+                            flex: 1,
+                            child: Text(
+                              displayTicket,
+                              style: TextStyle(fontWeight: FontWeight.bold, color: accentColor != Colors.grey ? accentColor : null),
+                            ),
+                          ),
+                          // Cliente
+                          Expanded(
+                            flex: 2,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  nombre,
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Teléfono
+                          Expanded(
+                            flex: 2,
+                            child: Row(
+                              children: [
+                                if (telefono.isNotEmpty) ...[
+                                  Icon(Icons.phone, size: 14, color: accentColor != Colors.grey ? accentColor : Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    telefono,
+                                    style: TextStyle(color: Colors.grey[700]),
+                                  ),
+                                ] else ...[
+                                  const Text('-', style: TextStyle(color: Colors.grey)),
+                                ],
+                              ],
+                            ),
+                          ),
+                          // Diseñador
+                          Expanded(
+                            flex: 2,
+                            child: Row(
+                              children: [
+                                Icon(Icons.brush, size: 14, color: accentColor != Colors.grey ? accentColor : Colors.grey),
+                                const SizedBox(width: 4),
+                                Text(
+                                  designerName.isNotEmpty ? designerName : 'Sin Asignar',
+                                  style: TextStyle(color: accentColor != Colors.grey ? accentColor : null, fontWeight: accentColor != Colors.grey ? FontWeight.w600 : null),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Estado Chip
+                          Expanded(
+                            flex: 2,
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: _buildEstadoChip(orden),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 );
               },
-              reservedSize: 40,
             ),
           ),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) => Text('${value.toStringAsFixed(1)}M', style: const TextStyle(fontSize: 10)),
-              reservedSize: 50,
-            ),
-          ),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEstadoChip(Orden orden) {
+    String estado = orden.estadoDiseno;
+    
+    if (orden.estado.toLowerCase() == 'facturado') {
+      estado = 'Completado';
+    }
+
+    if (estado.isEmpty) {
+      estado = 'Pendiente';
+    }
+
+    Color chipColor;
+    Color bgColor;
+
+    switch (estado.toLowerCase()) {
+      case 'asignado':
+        chipColor = Colors.blue[700]!;
+        bgColor = Colors.blue[50]!;
+        break;
+      case 'en proceso':
+        chipColor = Colors.orange[800]!;
+        bgColor = Colors.orange[50]!;
+        break;
+      case 'completado':
+      case 'facturado':
+        chipColor = Colors.green[700]!;
+        bgColor = Colors.green[50]!;
+        estado = 'Completado';
+        break;
+      default:
+        chipColor = Colors.grey[700]!;
+        bgColor = Colors.grey[100]!;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: chipColor.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        estado,
+        style: TextStyle(
+          color: chipColor,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
         ),
-        borderData: FlBorderData(show: false),
-        gridData: const FlGridData(show: false),
       ),
     );
   }

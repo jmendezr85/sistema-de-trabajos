@@ -5,8 +5,9 @@ import 'package:http/http.dart' as http;
 
 import '../../services/auth_provider.dart';
 import '../../services/theme_provider.dart';
+import '../../services/pb_service.dart';
 import '../auth/login_view.dart';
-import '../designer/formulario_pos_view.dart';
+import '../designer/designer_dashboard_view.dart';
 import '../cashier/dashboard_gerencial_v3.dart';
 import '../cashier/lista_pendientes_view.dart';
 import '../cashier/lista_pagados_view.dart';
@@ -38,6 +39,10 @@ class _HomeViewState extends State<HomeView> {
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, _) {
+        if (authProvider.isDisenador && !authProvider.isAdmin) {
+          return const DesignerDashboardView();
+        }
+
         return Scaffold(
           body: Row(
             children: [
@@ -45,7 +50,10 @@ class _HomeViewState extends State<HomeView> {
               SizedBox(
                 width: 200,
                 child: Container(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.05),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -54,13 +62,21 @@ class _HomeViewState extends State<HomeView> {
                         padding: const EdgeInsets.all(20),
                         child: Row(
                           children: [
-                            Icon(Icons.print, color: Theme.of(context).colorScheme.primary, size: 28),
+                            Icon(Icons.print,
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 28),
                             const SizedBox(width: 10),
                             const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Sistema de', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
-                                Text('Trabajos', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
+                                Text('Sistema de',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w900)),
+                                Text('Trabajos',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w900)),
                               ],
                             ),
                           ],
@@ -79,26 +95,39 @@ class _HomeViewState extends State<HomeView> {
                         icon: Icons.brush,
                         label: 'Área de Diseño',
                         isSelected: _selectedIndex == 1,
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FormularioPosView())),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const DesignerDashboardView())),
                       ),
                       if (authProvider.isAdmin) ...[
                         _SidebarItem(
                           icon: Icons.point_of_sale,
                           label: 'Área de Caja',
                           isSelected: _selectedIndex == 2,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ListaPendientesView())),
+                          onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const ListaPendientesView())),
                         ),
                         _SidebarItem(
                           icon: Icons.receipt_long,
                           label: 'Inventario del Día',
                           isSelected: _selectedIndex == 3,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ListaPagadosView())),
+                          onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const ListaPagadosView())),
                         ),
                         _SidebarItem(
                           icon: Icons.analytics,
                           label: 'Dashboard Gerencial',
                           isSelected: _selectedIndex == 4,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DashboardGerencialView())),
+                          onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      const DashboardGerencialView())),
                         ),
                       ],
 
@@ -120,14 +149,20 @@ class _HomeViewState extends State<HomeView> {
                               ),
                               child: const Row(
                                 children: [
-                                  Icon(Icons.check_circle, size: 16, color: Colors.green),
+                                  Icon(Icons.check_circle,
+                                      size: 16, color: Colors.green),
                                   SizedBox(width: 8),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text('Sistema Seguro', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                        Text('Conectado', style: TextStyle(fontSize: 10)),
+                                        Text('Sistema Seguro',
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold)),
+                                        Text('Conectado',
+                                            style: TextStyle(fontSize: 10)),
                                       ],
                                     ),
                                   ),
@@ -150,7 +185,9 @@ class _HomeViewState extends State<HomeView> {
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+                        border: Border(
+                            bottom: BorderSide(
+                                color: Theme.of(context).dividerColor)),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -160,7 +197,10 @@ class _HomeViewState extends State<HomeView> {
                             children: [
                               Text(
                                 '¡Bienvenido, ${authProvider.email?.split('@')[0]}! 👋',
-                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -171,8 +211,12 @@ class _HomeViewState extends State<HomeView> {
                           ),
                           Row(
                             children: [
-                              IconButton(icon: const Icon(Icons.search), onPressed: () {}),
-                              IconButton(icon: const Icon(Icons.notifications), onPressed: () {}),
+                              IconButton(
+                                  icon: const Icon(Icons.search),
+                                  onPressed: () {}),
+                              IconButton(
+                                  icon: const Icon(Icons.notifications),
+                                  onPressed: () {}),
                               PopupMenuButton<String>(
                                 onSelected: (value) {
                                   if (value == 'logout') {
@@ -182,27 +226,41 @@ class _HomeViewState extends State<HomeView> {
                                   }
                                 },
                                 itemBuilder: (BuildContext context) {
-                                  final themeProvider = context.read<ThemeProvider>();
+                                  final themeProvider =
+                                      context.read<ThemeProvider>();
                                   return [
                                     PopupMenuItem(
                                       value: 'theme',
                                       child: Row(
                                         children: [
-                                          Icon(themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode, size: 18),
+                                          Icon(
+                                              themeProvider.isDarkMode
+                                                  ? Icons.light_mode
+                                                  : Icons.dark_mode,
+                                              size: 18),
                                           const SizedBox(width: 8),
-                                          Text(themeProvider.isDarkMode ? 'Modo Claro' : 'Modo Oscuro'),
+                                          Text(themeProvider.isDarkMode
+                                              ? 'Modo Claro'
+                                              : 'Modo Oscuro'),
                                         ],
                                       ),
                                     ),
                                     const PopupMenuDivider(),
                                     const PopupMenuItem(
                                       value: 'logout',
-                                      child: Row(children: [Icon(Icons.logout, size: 18), SizedBox(width: 8), Text('Cerrar Sesión')]),
+                                      child: Row(children: [
+                                        Icon(Icons.logout, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Cerrar Sesión')
+                                      ]),
                                     ),
                                   ];
                                 },
-                                child: const CircleAvatar(
-                                  backgroundImage: NetworkImage('https://ui-avatars.com/api/?name=Admin'),
+                                child: CircleAvatar(
+                                  backgroundColor:
+                                      Theme.of(context).colorScheme.primary,
+                                  child: const Icon(Icons.person,
+                                      color: Colors.white),
                                 ),
                               ),
                             ],
@@ -218,64 +276,113 @@ class _HomeViewState extends State<HomeView> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // KPIs
-                            const SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  _KpiSmallCard(title: 'Órdenes hoy', value: '24', change: '+12%', icon: Icons.receipt),
-                                  _KpiSmallCard(title: 'Pendientes de cobro', value: '8', change: '-5%', icon: Icons.hourglass_empty),
-                                  _KpiSmallCard(title: 'Pagados hoy', value: '16', change: '+8%', icon: Icons.check_circle),
-                                  _KpiSmallCard(title: 'Ventas del día', value: '\$12,450', change: '+15%', icon: Icons.trending_up),
-                                ],
+                            if (authProvider.isAdmin) ...[
+                              const _DespachoRapidoBar(),
+                              const SizedBox(height: 24),
+                              // KPIs
+                              const SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: [
+                                    _KpiSmallCard(
+                                        title: 'Órdenes hoy',
+                                        value: '24',
+                                        change: '+12%',
+                                        icon: Icons.receipt),
+                                    _KpiSmallCard(
+                                        title: 'Pendientes de cobro',
+                                        value: '8',
+                                        change: '-5%',
+                                        icon: Icons.hourglass_empty),
+                                    _KpiSmallCard(
+                                        title: 'Pagados hoy',
+                                        value: '16',
+                                        change: '+8%',
+                                        icon: Icons.check_circle),
+                                    _KpiSmallCard(
+                                        title: 'Ventas del día',
+                                        value: '\$12,450',
+                                        change: '+15%',
+                                        icon: Icons.trending_up),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 32),
+                              const SizedBox(height: 32),
+                            ],
 
                             // Módulos
-                            Text('Módulos Principales', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                            Text('Módulos Principales',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.bold)),
                             const SizedBox(height: 16),
 
                             GridView(
                               physics: const NeverScrollableScrollPhysics(),
                               shrinkWrap: true,
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 3,
                                 crossAxisSpacing: 12,
                                 mainAxisSpacing: 12,
                                 mainAxisExtent: 125,
                               ),
                               children: [
-                                _ModuleCardCompact(
-                                  title: 'Área de Diseño',
-                                  description: 'Crea nuevas órdenes, gestiona proyectos y tickets de diseño.',
-                                  icon: Icons.brush,
-                                  color: const Color(0xFF3257D6),
-                                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FormularioPosView())),
-                                ),
-                                if (authProvider.isAdmin)
+                                if (authProvider.isAdmin ||
+                                    authProvider.isDisenador)
+                                  _ModuleCardCompact(
+                                    title: 'Área de Diseño',
+                                    description:
+                                        'Crea nuevas órdenes, gestiona proyectos y tickets de diseño.',
+                                    icon: Icons.brush,
+                                    color: const Color(0xFF3257D6),
+                                    onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) =>
+                                                const DesignerDashboardView())),
+                                  ),
+                                if (authProvider.isAdmin ||
+                                    authProvider.isCajero)
                                   _ModuleCardCompact(
                                     title: 'Área de Caja',
-                                    description: 'Cobra pendientes, registra pagos y emite comprobantes.',
+                                    description:
+                                        'Cobra pendientes, registra pagos y emite comprobantes.',
                                     icon: Icons.point_of_sale,
                                     color: const Color(0xFF1F7A3A),
-                                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ListaPendientesView())),
+                                    onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) =>
+                                                const ListaPendientesView())),
                                   ),
-                                if (authProvider.isAdmin)
+                                if (authProvider.isAdmin ||
+                                    authProvider.isCajero)
                                   _ModuleCardCompact(
                                     title: 'Inventario del Día',
-                                    description: 'Consulta pagos, aplica filtros y exporta a Excel.',
+                                    description:
+                                        'Consulta pagos, aplica filtros y exporta a Excel.',
                                     icon: Icons.receipt_long,
                                     color: const Color(0xFF1F2A44),
-                                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ListaPagadosView())),
+                                    onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) =>
+                                                const ListaPagadosView())),
                                   ),
                                 if (authProvider.isAdmin)
                                   _ModuleCardCompact(
                                     title: 'Dashboard Gerencial',
-                                    description: 'Visualiza analíticas, métricas y reportes clave del negocio.',
+                                    description:
+                                        'Visualiza analíticas, métricas y reportes clave del negocio.',
                                     icon: Icons.analytics,
                                     color: const Color(0xFF6C3B8D),
-                                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DashboardGerencialView())),
+                                    onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) =>
+                                                const DashboardGerencialView())),
                                   ),
                               ],
                             ),
@@ -283,7 +390,7 @@ class _HomeViewState extends State<HomeView> {
                         ),
                       ),
                     ),
-                    
+
                     // Franja de Clima y Consejo anclada estrictamente al fondo
                     const Padding(
                       padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -324,10 +431,16 @@ class _SidebarItem extends StatelessWidget {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1) : Colors.transparent,
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+              : Colors.transparent,
           child: Row(
             children: [
-              Icon(icon, size: 20, color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey),
+              Icon(icon,
+                  size: 20,
+                  color: isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -335,13 +448,263 @@ class _SidebarItem extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey,
+                    color: isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.grey,
                   ),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DespachoRapidoBar extends StatefulWidget {
+  const _DespachoRapidoBar();
+
+  @override
+  State<_DespachoRapidoBar> createState() => _DespachoRapidoBarState();
+}
+
+class _DespachoRapidoBarState extends State<_DespachoRapidoBar> {
+  final _pbService = PocketBaseService();
+  final _whatsappCtrl = TextEditingController();
+  final _clienteCtrl = TextEditingController();
+  bool _enviando = false;
+  bool _cargandoDisenadores = true;
+  List<Map<String, String>> _disenadores = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cargarDisenadores();
+    });
+  }
+
+  Future<void> _cargarDisenadores() async {
+    try {
+      final res = await _pbService.pb.collection('users').getFullList();
+      debugPrint('PB RAW: ${res.length}');
+
+      List<Map<String, String>> combinados = [];
+      for (final user in res) {
+        debugPrint('Evaluando: ${user.data}');
+        final rolString = user.getStringValue('rol').toLowerCase();
+        final rolData = (user.data['rol']?.toString() ?? '').toLowerCase();
+
+        if (rolString == 'disenador' ||
+            rolString == 'diseñador' ||
+            rolData == 'disenador' ||
+            rolData == 'diseñador') {
+          String name = user.getStringValue('name');
+          if (name.isEmpty) {
+            name = user.data['name']?.toString() ?? '';
+          }
+          if (name.isEmpty) {
+            name = user.getStringValue('username');
+          }
+          if (name.isEmpty) {
+            name = user.data['username']?.toString() ?? 'Diseñador';
+          }
+
+          combinados.add({
+            'id': user.id,
+            'nombre': name,
+          });
+        }
+      }
+
+      // Contingencia temporal quemada
+      if (res.isEmpty || combinados.isEmpty) {
+        combinados = [
+          {'id': 'temp_cristian', 'nombre': 'Cristian'},
+          {'id': 'temp_ramon', 'nombre': 'Ramón'},
+        ];
+      }
+
+      if (mounted) {
+        setState(() {
+          _disenadores = combinados;
+          _cargandoDisenadores = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error cargando diseñadores: $e');
+      if (mounted) {
+        setState(() {
+          _disenadores = [
+            {'id': 'temp_cristian', 'nombre': 'Cristian'},
+            {'id': 'temp_ramon', 'nombre': 'Ramón'},
+          ];
+          _cargandoDisenadores = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _crearOrdenRapida(
+      String disenadorId, String disenadorNombre) async {
+    final nombre = _clienteCtrl.text.trim();
+    final whatsapp = _whatsappCtrl.text.trim();
+
+    if (nombre.isEmpty || whatsapp.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Completa todos los campos'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final clienteUnificado = '$nombre / $whatsapp';
+
+    setState(() => _enviando = true);
+    try {
+      await _pbService.crearOrdenRapida(
+        cliente: clienteUnificado,
+        whatsappCliente: whatsapp,
+        disenadorId: disenadorId,
+      );
+
+      if (mounted) {
+        _clienteCtrl.clear();
+        _whatsappCtrl.clear();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✓ Orden asignada a $disenadorNombre'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } on Exception catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _enviando = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _clienteCtrl.dispose();
+    _whatsappCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.send,
+                color: Theme.of(context).colorScheme.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Despacho Rápido',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _clienteCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Nombre del cliente',
+                    prefixIcon: const Icon(Icons.person, size: 18),
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _whatsappCtrl,
+                  decoration: InputDecoration(
+                    hintText: '300XXXXXXXXX',
+                    prefixIcon: const Icon(Icons.phone, size: 18),
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                  ),
+                  keyboardType: TextInputType.phone,
+                ),
+              ),
+              const SizedBox(width: 12),
+              if (_enviando || _cargandoDisenadores)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: _disenadores.map((d) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: FilledButton.icon(
+                        onPressed: () =>
+                            _crearOrdenRapida(d['id']!, d['nombre']!),
+                        icon: const Icon(Icons.person_add, size: 16),
+                        label: Text(d['nombre']!,
+                            style: const TextStyle(fontSize: 12)),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 0),
+                          minimumSize: const Size(0, 36),
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -369,7 +732,9 @@ class _KpiSmallCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)),
+        border: Border.all(
+            color:
+                Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,15 +743,23 @@ class _KpiSmallCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                child: Text(title,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600])),
               ),
-              Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
+              Icon(icon,
+                  size: 16, color: Theme.of(context).colorScheme.primary),
             ],
           ),
           const SizedBox(height: 8),
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(value,
+              style:
+                  const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text(change, style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w600)),
+          Text(change,
+              style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.green,
+                  fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -418,13 +791,19 @@ class _ModuleCardCompact extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [color.withValues(alpha: 0.95), color.withValues(alpha: 0.75)],
+              colors: [
+                color.withValues(alpha: 0.95),
+                color.withValues(alpha: 0.75)
+              ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
-              BoxShadow(blurRadius: 16, offset: const Offset(0, 8), color: color.withValues(alpha: 0.2)),
+              BoxShadow(
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                  color: color.withValues(alpha: 0.2)),
             ],
           ),
           padding: const EdgeInsets.all(12),
@@ -435,15 +814,24 @@ class _ModuleCardCompact extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Icon(icon, color: Colors.white, size: 24),
-                  Icon(Icons.arrow_forward, color: Colors.white.withValues(alpha: 0.7), size: 16),
+                  Icon(Icons.arrow_forward,
+                      color: Colors.white.withValues(alpha: 0.7), size: 16),
                 ],
               ),
               const Spacer(),
-              Text(title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900)),
+              Text(title,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900)),
               const SizedBox(height: 4),
               Text(
                 description,
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 11, height: 1.2, fontWeight: FontWeight.w500),
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: 11,
+                    height: 1.2,
+                    fontWeight: FontWeight.w500),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -451,12 +839,17 @@ class _ModuleCardCompact extends StatelessWidget {
               Align(
                 alignment: Alignment.bottomRight,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Text('Ir al módulo', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+                  child: const Text('Ir al módulo',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
@@ -474,7 +867,8 @@ class _PulsingSunIcon extends StatefulWidget {
   State<_PulsingSunIcon> createState() => _PulsingSunIconState();
 }
 
-class _PulsingSunIconState extends State<_PulsingSunIcon> with SingleTickerProviderStateMixin {
+class _PulsingSunIconState extends State<_PulsingSunIcon>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
 
@@ -608,20 +1002,22 @@ class _DailyAdviceAndWeatherState extends State<_DailyAdviceAndWeather> {
       future: _dataFuture,
       builder: (context, snapshot) {
         final isLoading = snapshot.connectionState == ConnectionState.waiting;
-        final data = snapshot.data ?? {
-          'proverb': _proverbs[DateTime.now().day % _proverbs.length],
-          'temp': '28.0°C',
-          'pop': '0.0 mm',
-          'humidity': '60%',
-          'wind': '12.0 km/h'
-        };
+        final data = snapshot.data ??
+            {
+              'proverb': _proverbs[DateTime.now().day % _proverbs.length],
+              'temp': '28.0°C',
+              'pop': '0.0 mm',
+              'humidity': '60%',
+              'wind': '12.0 km/h'
+            };
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: 0.25),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.5), width: 1.2),
+            border: Border.all(
+                color: Colors.cyanAccent.withValues(alpha: 0.5), width: 1.2),
             boxShadow: [
               BoxShadow(
                 color: Colors.cyanAccent.withValues(alpha: 0.05),
@@ -631,18 +1027,22 @@ class _DailyAdviceAndWeatherState extends State<_DailyAdviceAndWeather> {
             ],
           ),
           child: isLoading
-              ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.cyanAccent))
+              ? const Center(
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.cyanAccent))
               : Row(
                   children: [
                     // 1. Izquierda: Sol pulsante y texto de clima
                     const _PulsingSunIcon(),
                     const SizedBox(width: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.cyanAccent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.5)),
+                        border: Border.all(
+                            color: Colors.cyanAccent.withValues(alpha: 0.5)),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -661,18 +1061,31 @@ class _DailyAdviceAndWeatherState extends State<_DailyAdviceAndWeather> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('Lluvia: ${data['pop']}', style: const TextStyle(color: Colors.cyanAccent, fontSize: 10, height: 1.1)),
-                              Text('Humedad: ${data['humidity']}', style: const TextStyle(color: Colors.cyanAccent, fontSize: 10, height: 1.1)),
-                              Text('Viento: ${data['wind']}', style: const TextStyle(color: Colors.cyanAccent, fontSize: 10, height: 1.1)),
+                              Text('Lluvia: ${data['pop']}',
+                                  style: const TextStyle(
+                                      color: Colors.cyanAccent,
+                                      fontSize: 10,
+                                      height: 1.1)),
+                              Text('Humedad: ${data['humidity']}',
+                                  style: const TextStyle(
+                                      color: Colors.cyanAccent,
+                                      fontSize: 10,
+                                      height: 1.1)),
+                              Text('Viento: ${data['wind']}',
+                                  style: const TextStyle(
+                                      color: Colors.cyanAccent,
+                                      fontSize: 10,
+                                      height: 1.1)),
                             ],
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 16),
-                    
+
                     // 2. Centro: Frecuencia cardíaca
-                    const Icon(Icons.monitor_heart, color: Colors.blueAccent, size: 26),
+                    const Icon(Icons.monitor_heart,
+                        color: Colors.blueAccent, size: 26),
                     const SizedBox(width: 16),
 
                     // 3. Derecha: Bombilla con glow y consejo
@@ -690,16 +1103,20 @@ class _DailyAdviceAndWeatherState extends State<_DailyAdviceAndWeather> {
                                 ),
                               ],
                             ),
-                            child: const Icon(Icons.lightbulb, color: Colors.amber, size: 22),
+                            child: const Icon(Icons.lightbulb,
+                                color: Colors.amber, size: 22),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               data['proverb']!,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontStyle: FontStyle.italic,
-                                color: Colors.grey[300],
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    fontStyle: FontStyle.italic,
+                                    color: Colors.grey[300],
+                                  ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),

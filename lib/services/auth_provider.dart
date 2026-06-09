@@ -17,8 +17,9 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _isAuthenticated;
   bool get isLoading => _isLoading;
 
-  bool get isAdmin => _role == 'admin';
-  bool get isCajero => _role == 'cajero';
+  bool get isAdmin => _role == 'admin' || _role == 'Admin';
+  bool get isCajero => _role == 'cajero' || _role == 'Cajero';
+  bool get isDisenador => _role == 'disenador' || _role == 'Disenador' || _role == 'diseñador' || _role == 'Diseñador';
 
   Future<bool> login(String email, String password) async {
     _isLoading = true;

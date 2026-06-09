@@ -11,6 +11,8 @@ class Orden {
   final String estado;
   final String disenador;
   final String materiales;
+  final String? whatsappCliente; // WhatsApp del cliente (sin +57)
+  final String estadoDiseno; // Estado del flujo de diseño: Asignado, En Proceso, Completado
 
   final int ticketNo;
   final String codigoCobro;
@@ -41,6 +43,8 @@ class Orden {
     required this.estado,
     required this.disenador,
     required this.materiales,
+    this.whatsappCliente,
+    this.estadoDiseno = '',
     required this.ticketNo,
     required this.codigoCobro,
     required this.pagadoEn,
@@ -111,6 +115,10 @@ class Orden {
       estado: record['Estado'] ?? 'Pendiente',
       disenador: record['disenador'] ?? '',
       materiales: record['materiales'] ?? '',
+      whatsappCliente: (record['whatsapp_cliente'] ?? '').toString().isEmpty
+          ? null
+          : record['whatsapp_cliente'].toString(),
+      estadoDiseno: record['estado_diseno'] ?? '',
       ticketNo: parseInt(record['ticket_no']),
       codigoCobro: record['codigo_cobro'] ?? '',
       pagadoEn: safeDateNullable(record['pagado_en']),

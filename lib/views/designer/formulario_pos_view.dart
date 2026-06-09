@@ -8,7 +8,9 @@ import '../../services/print_service.dart';
 import '../../models/orden_model.dart';
 
 class FormularioPosView extends StatefulWidget {
-  const FormularioPosView({super.key});
+  final String? clienteInicial;
+  final String? whatsappInicial;
+  const FormularioPosView({super.key, this.clienteInicial, this.whatsappInicial});
 
   @override
   State<FormularioPosView> createState() => _FormularioPosViewState();
@@ -76,9 +78,42 @@ class _FormularioPosViewState extends State<FormularioPosView> {
     },
   ];
 
-  final _clienteCtrl = TextEditingController();
-  final List<String> _disenadores = const ['Ramon', 'Cristian'];
-  String _disenador = 'Ramon';
+  late final TextEditingController _clienteCtrl;
+  String _designerName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    String c = widget.clienteInicial?.trim() ?? '';
+    final String t = widget.whatsappInicial?.trim() ?? '';
+    if (c.isNotEmpty && t.isNotEmpty) {
+      c = '$c / $t';
+    } else if (t.isNotEmpty) {
+      c = t;
+    }
+    _clienteCtrl = TextEditingController(text: c);
+    
+    final authModel = _service.pb.authStore.model;
+    if (authModel != null) {
+      _designerName = authModel.getStringValue('name');
+      if (_designerName.isEmpty) {
+        _designerName = authModel.getStringValue('username');
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _clienteCtrl.dispose();
+    _anchoCtrl.dispose();
+    _altoCtrl.dispose();
+    _ploteoInteriorBaseCtrl.dispose();
+    _disenoDescCtrl.dispose();
+    _disenoValorCtrl.dispose();
+    _abonoCtrl.dispose();
+    super.dispose();
+  }
+
   final List<OrdenItem> _detalle = [];
   bool _saving = false;
 
@@ -461,7 +496,7 @@ class _FormularioPosViewState extends State<FormularioPosView> {
       final abono = double.tryParse(_abonoCtrl.text.trim()) ?? 0.0;
       final Orden ordenCreada = await _service.crearOrdenV2ConItems(
           cliente: cliente,
-          disenador: _disenador,
+          disenador: _designerName,
           itemsSinOrdenId: _detalle,
           materiales: materiales,
           tipoTrabajo: tipoTrabajo,
@@ -490,25 +525,25 @@ class _FormularioPosViewState extends State<FormularioPosView> {
     }
   }
 
-  Color _colorByDesigner(String d) {
-    final x = d.trim().toLowerCase();
-    if (x == 'ramon') {
-      return const Color(0xFF38BDF8);
-    }
-    if (x == 'cristian') {
-      return const Color(0xFFFFA11A);
-    }
-    return const Color(0xFF13C6A5);
-  }
-
   static const _bgColor = Color(0xFFF8FAFC);
   static const _sidebarColor = Color(0xFF1E293B);
   static const _primaryBlue = Color(0xFF2563EB);
 
+  Color _getColorByDesigner(String name) {
+    final x = name.trim().toLowerCase();
+    if (x == 'ramon') {
+      return const Color(0xFF38BDF8); // _ramonColor
+    }
+    if (x == 'cristian') {
+      return const Color(0xFFFFA11A); // _cristianColor
+    }
+    return _primaryBlue;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final colorDisenadorActual = _colorByDesigner(_disenador);
+    final colorDisenadorActual = _getColorByDesigner(_designerName);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -594,48 +629,6 @@ class _FormularioPosViewState extends State<FormularioPosView> {
                               color: Theme.of(context).textTheme.titleLarge?.color,
                               fontSize: 20, fontWeight: FontWeight.w900)),
                       const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                            border: Border.all(
-                                color: colorDisenadorActual.withValues(
-                                    alpha: 0.3)),
-                            borderRadius: BorderRadius.circular(20)),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                                radius: 12,
-                                backgroundColor:
-                                    colorDisenadorActual.withValues(alpha: 0.2),
-                                child: Text(_disenador[0],
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: colorDisenadorActual,
-                                        fontWeight: FontWeight.bold))),
-                            const SizedBox(width: 8),
-                            DropdownButton<String>(
-                              value: _disenador,
-                              underline: const SizedBox(),
-                              icon: const Icon(Icons.keyboard_arrow_down,
-                                  size: 16),
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark ? const Color(0xFFF1F5F9) : Colors.black87,
-                                  fontSize: 14),
-                              items: _disenadores
-                                  .map((d) => DropdownMenuItem(
-                                      value: d, child: Text(d)))
-                                  .toList(),
-                              onChanged: (v) {
-                                setState(() {
-                                  _disenador = v!;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      )
                     ],
                   ),
                 ),

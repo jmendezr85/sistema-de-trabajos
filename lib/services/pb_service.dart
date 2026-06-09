@@ -1,10 +1,15 @@
 import 'dart:math';
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:pocketbase/pocketbase.dart';
 import '../models/orden_model.dart';
 import '../models/orden_item_model.dart';
 
 class PocketBaseService {
+  static final PocketBaseService _instance = PocketBaseService._internal();
+  factory PocketBaseService() => _instance;
+  PocketBaseService._internal();
+
   /// Si estás en emulador Android cambia a: http://10.0.2.2:8090
   final pb = PocketBase('http://127.0.0.1:8090');
 
@@ -59,15 +64,12 @@ class PocketBaseService {
   // ====== Ticket / código ======
   Future<int> _siguienteTicketNo() async {
     try {
-      final res = await pb.collection('ordenes').getList(
-            page: 1,
-            perPage: 500,
-          );
+      final res = await pb.collection('ordenes').getFullList();
 
-      if (res.items.isEmpty) return 1;
+      if (res.isEmpty) return 1;
 
       int maxTicket = 0;
-      for (final it in res.items) {
+      for (final it in res) {
         final v = it.data['ticket_no'];
         final n =
             (v is num) ? v.toInt() : int.tryParse(v?.toString() ?? '') ?? 0;
@@ -203,7 +205,6 @@ class PocketBaseService {
   Future<void> crearOrden({
     required String cliente,
     required List<String> tipoTrabajo, // MULTI
-    required String disenador,
     required String materiales,
     double costoExtras = 0, // extras manual
     double abono = 0, // abono
@@ -217,6 +218,7 @@ class PocketBaseService {
   }) async {
     final ticketNo = await _siguienteTicketNo();
     final codigo = _codigoCobro();
+    final String disenadorId = pb.authStore.model?.id ?? '';
 
     double costoMaterial = 0;
     double costoPloteo = 0;
@@ -258,7 +260,7 @@ class PocketBaseService {
       'Monto': total,
       'abono': abono,
       'Estado': 'Pendiente',
-      'disenador': disenador,
+      'disenador': disenadorId,
       'materiales': materiales,
       'ticket_no': ticketNo,
       'codigo_cobro': codigo,
@@ -300,18 +302,16 @@ class PocketBaseService {
   }
 
   Future<List<OrdenItem>> obtenerItemsDeOrden(String ordenId) async {
-    final res = await pb.collection('orden_items').getList(
-          page: 1,
-          perPage: 500,
+    final res = await pb.collection('orden_items').getFullList(
           filter: "orden='$ordenId'",
         );
 
     final items =
-        res.items.map((r) => OrdenItem.fromRecord(_recordToMap(r))).toList();
+        res.map((r) => OrdenItem.fromRecord(_recordToMap(r))).toList();
 
     items.sort((a, b) {
-      final ra = res.items.firstWhere((x) => x.id == a.id);
-      final rb = res.items.firstWhere((x) => x.id == b.id);
+      final ra = res.firstWhere((x) => x.id == a.id);
+      final rb = res.firstWhere((x) => x.id == b.id);
       final da = _parseCreated(ra.created);
       final db = _parseCreated(rb.created);
       return da.compareTo(db);
@@ -326,14 +326,15 @@ class PocketBaseService {
 
   Future<Orden> crearOrdenV2ConItems({
     required String cliente,
-    required String disenador,
     required List<OrdenItem> itemsSinOrdenId,
     String materiales = '',
     List<String> tipoTrabajo = const [],
     double abono = 0,
+    String? disenador,
   }) async {
     final ticketNo = await _siguienteTicketNo();
     final codigo = _codigoCobro();
+    final String disenadorId = disenador ?? pb.authStore.model?.id ?? '';
 
     double total = 0;
     double costoLaser = 0;
@@ -347,7 +348,7 @@ class PocketBaseService {
 
     final bodyOrden = <String, dynamic>{
       'cliente': cliente,
-      'disenador': disenador,
+      'disenador': disenadorId,
       'Estado': 'Pendiente',
       'Monto': total,
       'abono': abono,
@@ -386,14 +387,12 @@ class PocketBaseService {
   }
 
   Future<List<Orden>> obtenerOrdenesPendientes() async {
-    final res = await pb.collection('ordenes').getList(
-          page: 1,
-          perPage: 500,
-          filter: "Estado='Pendiente'",
+    final res = await pb.collection('ordenes').getFullList(
+          filter: "Estado='Pendiente' && ticket_no > 0",
         );
 
     final ordenes =
-        res.items.map((r) => Orden.fromRecord(_recordToMap(r))).toList();
+        res.map((r) => Orden.fromRecord(_recordToMap(r))).toList();
 
     ordenes.sort((a, b) {
       final da = _parseCreated(a.created);
@@ -417,14 +416,12 @@ class PocketBaseService {
       filter = "($filter) && disenador='$safe'";
     }
 
-    final res = await pb.collection('ordenes').getList(
-          page: 1,
-          perPage: 500,
+    final res = await pb.collection('ordenes').getFullList(
           filter: filter,
         );
 
     final ordenes =
-        res.items.map((r) => Orden.fromRecord(_recordToMap(r))).toList();
+        res.map((r) => Orden.fromRecord(_recordToMap(r))).toList();
 
     ordenes.sort((a, b) {
       final pa = (a.pagadoEn ?? '').toString();
@@ -518,22 +515,213 @@ class PocketBaseService {
 
   Future<List<Orden>> obtenerTodasLasOrdenes() async {
     try {
-      final res = await pb.collection('ordenes').getList(
-            page: 1,
-            perPage: 1000,
-          );
+      final response = await pb.send(
+        '/api/collections/ordenes/records',
+        query: {
+          'sort': '-created',
+        },
+      );
 
-      final ordenes =
-          res.items.map((r) => Orden.fromRecord(_recordToMap(r))).toList();
-
-      ordenes.sort((a, b) {
-        final da = _parseCreated(a.created);
-        final db = _parseCreated(b.created);
-        return db.compareTo(da);
-      });
+      final items = response['items'] as List<dynamic>? ?? [];
+      final ordenes = items.map((e) => Orden.fromRecord(e as Map<String, dynamic>)).toList();
 
       return ordenes;
     } catch (_) {
+      return [];
+    }
+  }
+
+  // ====== WHATSAPP ASSIGNMENT SYSTEM ======
+
+  Future<Orden> crearOrdenRapida({
+    required String cliente,
+    required String whatsappCliente,
+    String? disenadorId,
+  }) async {
+    try {
+      final String dId = disenadorId ?? (pb.authStore.model?.id ?? '');
+      final int tempTicketNo = -DateTime.now().millisecondsSinceEpoch;
+
+      final body = <String, dynamic>{
+        'cliente': cliente,
+        'Tipo_de_trabajo': [],
+        'Monto': 0.0,
+        'abono': 0.0,
+        'Estado': 'Pendiente',
+        'disenador': dId,
+        'materiales': '',
+        'whatsapp_cliente': whatsappCliente,
+        'estado_diseno': 'Asignado',
+        'pagado_en': null,
+        'ticket_no': tempTicketNo,
+      };
+
+      final created = await pb.collection('ordenes').create(body: body);
+      return Orden.fromRecord(_recordToMap(created));
+    } catch (e) {
+      developer.log('Error al crear orden rápida: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> actualizarEstadoOrden(
+    String ordenId,
+    String nuevoEstado,
+  ) async {
+    try {
+      await pb.collection('ordenes').update(ordenId, body: {
+        'estado_diseno': nuevoEstado,
+      });
+    } catch (e) {
+      developer.log('Error al actualizar estado de orden: $e');
+      rethrow;
+    }
+  }
+
+  Stream<List<Orden>> listenTodasLasOrdenesActivas() {
+    final controller = StreamController<List<Orden>>();
+
+    Future<void> fetchOrdenes() async {
+      try {
+        final res = await pb.collection('ordenes').getFullList();
+
+        var ordenes = res.map((r) => Orden.fromRecord(_recordToMap(r))).toList();
+
+        // Filtro local en Dart
+        ordenes = ordenes.where((o) => o.estadoDiseno != 'Completado').toList();
+
+        // Ordenamiento local estricto descendente (más reciente primero)
+        ordenes.sort((a, b) => b.created.compareTo(a.created));
+
+        if (!controller.isClosed) {
+          controller.add(ordenes);
+        }
+      } catch (e) {
+        if (!controller.isClosed) {
+          controller.addError(e);
+        }
+      }
+    }
+
+    // Carga inicial
+    fetchOrdenes();
+
+    // Suscripción real-time
+    Future<void> initSub() async {
+      try {
+        await pb.collection('ordenes').subscribe('*', (e) {
+          fetchOrdenes();
+        });
+      } catch (err) {
+        developer.log('Error suscribiéndose a ordenes activas: $err');
+      }
+    }
+    initSub();
+
+    controller.onCancel = () {
+      pb.collection('ordenes').unsubscribe('*');
+      controller.close();
+    };
+
+    return controller.stream;
+  }
+
+  Stream<List<Orden>> listenOrdenesPorDisenador() {
+    final controller = StreamController<List<Orden>>();
+
+    Future<void> fetchOrdenes() async {
+      try {
+        final userId = pb.authStore.model?.id ?? '';
+        final userName = pb.authStore.model?.getStringValue('name') ?? '';
+        
+        final res = await pb.collection('ordenes').getFullList();
+
+        var ordenes = res.map((r) => Orden.fromRecord(_recordToMap(r))).toList();
+
+        // Filtro local en Dart por diseñador y estado
+        ordenes = ordenes.where((o) {
+          final isCompletado = o.estadoDiseno == 'Completado';
+          if (isCompletado) return false;
+          
+          if (userName.isNotEmpty) {
+            return o.disenador == userId || o.disenador == userName;
+          }
+          return o.disenador == userId;
+        }).toList();
+
+        // Ordenamiento local estricto descendente (más reciente primero)
+        ordenes.sort((a, b) => b.created.compareTo(a.created));
+
+        if (!controller.isClosed) {
+          controller.add(ordenes);
+        }
+      } catch (e) {
+        if (!controller.isClosed) {
+          controller.addError(e);
+        }
+      }
+    }
+
+    // Carga inicial
+    fetchOrdenes();
+
+    // Suscripción real-time
+    Future<void> initSub() async {
+      try {
+        await pb.collection('ordenes').subscribe('*', (e) {
+          fetchOrdenes();
+        });
+      } catch (err) {
+        developer.log('Error suscribiéndose a ordenes por diseñador: $err');
+      }
+    }
+    initSub();
+
+    controller.onCancel = () {
+      pb.collection('ordenes').unsubscribe('*');
+      controller.close();
+    };
+
+    return controller.stream;
+  }
+
+  Future<List<Map<String, String>>> obtenerDisenadoresUsers() async {
+    try {
+      final records = await pb.collection('users').getFullList();
+      developer.log('Usuarios recuperados: ${records.length}');
+
+      final disenadores = records
+          .where((user) {
+            final rol = (user.getStringValue('rol').isNotEmpty 
+                ? user.getStringValue('rol') 
+                : (user.data['rol']?.toString() ?? '')).toLowerCase();
+            return rol == 'disenador' || rol == 'diseñador';
+          })
+          .toList();
+
+      final resultado = <Map<String, String>>[];
+      for (final rec in disenadores) {
+        final id = rec.id;
+        String nombre = rec.getStringValue('name');
+        if (nombre.isEmpty) {
+          nombre = rec.data['name']?.toString() ?? '';
+        }
+        if (nombre.isEmpty) {
+          nombre = rec.getStringValue('username');
+        }
+        if (nombre.isEmpty) {
+          nombre = rec.data['username']?.toString() ?? 'Diseñador';
+        }
+        
+        resultado.add({
+          'id': id,
+          'nombre': nombre
+        });
+      }
+
+      return resultado;
+    } catch (e) {
+      developer.log('Error obteniendo diseñadores: $e');
       return [];
     }
   }

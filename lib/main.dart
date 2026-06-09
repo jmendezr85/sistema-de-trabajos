@@ -46,7 +46,9 @@ class _RootScreenState extends State<_RootScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeAuth();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeAuth();
+    });
   }
 
   Future<void> _initializeAuth() async {
