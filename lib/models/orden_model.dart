@@ -13,6 +13,7 @@ class Orden {
   final String materiales;
   final String? whatsappCliente; // WhatsApp del cliente (sin +57)
   final String estadoDiseno; // Estado del flujo de diseño: Asignado, En Proceso, Completado
+  final bool ocultoTrafico; // Borrado lógico para tráfico
 
   final int ticketNo;
   final String codigoCobro;
@@ -45,6 +46,7 @@ class Orden {
     required this.materiales,
     this.whatsappCliente,
     this.estadoDiseno = '',
+    this.ocultoTrafico = false,
     required this.ticketNo,
     required this.codigoCobro,
     required this.pagadoEn,
@@ -119,6 +121,7 @@ class Orden {
           ? null
           : record['whatsapp_cliente'].toString(),
       estadoDiseno: record['estado_diseno'] ?? '',
+      ocultoTrafico: record['oculto_trafico'] == true,
       ticketNo: parseInt(record['ticket_no']),
       codigoCobro: record['codigo_cobro'] ?? '',
       pagadoEn: safeDateNullable(record['pagado_en']),

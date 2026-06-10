@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:pocketbase/pocketbase.dart';
 import '../models/orden_model.dart';
 import '../models/orden_item_model.dart';
+import '../models/recordatorio_model.dart';
 
 class PocketBaseService {
   static final PocketBaseService _instance = PocketBaseService._internal();
@@ -274,6 +275,7 @@ class PocketBaseService {
       'costo_ploteo': costoPloteo,
       'costo_extras': costoExtrasFinal,
       'extras_detalle': extrasDetalle ?? '',
+      'estado_diseno': 'Completado',
     };
 
     await pb.collection('ordenes').create(body: body);
@@ -361,6 +363,7 @@ class PocketBaseService {
       'costo_ploteo': costoLaser,
       'costo_extras': 0,
       'extras_detalle': '',
+      'estado_diseno': 'Completado',
     };
 
     final created = await pb.collection('ordenes').create(body: bodyOrden);
@@ -453,6 +456,12 @@ class PocketBaseService {
 
   Future<void> eliminarOrden(String idOrden) async {
     await pb.collection('ordenes').delete(idOrden);
+  }
+
+  Future<void> ocultarOrdenTrafico(String idOrden) async {
+    await pb.collection('ordenes').update(idOrden, body: {
+      'oculto_trafico': true,
+    });
   }
 
   // 🌟 CONEXIÓN FIEL: Enviamos 'Archivado' con mayúscula exacta para cumplir el esquema Web
@@ -587,9 +596,6 @@ class PocketBaseService {
 
         var ordenes = res.map((r) => Orden.fromRecord(_recordToMap(r))).toList();
 
-        // Filtro local en Dart
-        ordenes = ordenes.where((o) => o.estadoDiseno != 'Completado').toList();
-
         // Ordenamiento local estricto descendente (más reciente primero)
         ordenes.sort((a, b) => b.created.compareTo(a.created));
 
@@ -609,8 +615,15 @@ class PocketBaseService {
     // Suscripción real-time
     Future<void> initSub() async {
       try {
+        await pb.collection('ordenes').unsubscribe('*');
         await pb.collection('ordenes').subscribe('*', (e) {
-          fetchOrdenes();
+          try {
+            if (!controller.isClosed) {
+              fetchOrdenes();
+            }
+          } catch (err) {
+            developer.log('Error en callback de suscripción (activas): $err');
+          }
         });
       } catch (err) {
         developer.log('Error suscribiéndose a ordenes activas: $err');
@@ -619,8 +632,14 @@ class PocketBaseService {
     initSub();
 
     controller.onCancel = () {
-      pb.collection('ordenes').unsubscribe('*');
-      controller.close();
+      try {
+        pb.collection('ordenes').unsubscribe('*');
+      } catch (err) {
+        developer.log('Error cancelando suscripción (activas): $err');
+      }
+      if (!controller.isClosed) {
+        controller.close();
+      }
     };
 
     return controller.stream;
@@ -668,8 +687,15 @@ class PocketBaseService {
     // Suscripción real-time
     Future<void> initSub() async {
       try {
+        await pb.collection('ordenes').unsubscribe('*');
         await pb.collection('ordenes').subscribe('*', (e) {
-          fetchOrdenes();
+          try {
+            if (!controller.isClosed) {
+              fetchOrdenes();
+            }
+          } catch (err) {
+            developer.log('Error en callback de suscripción (diseñador): $err');
+          }
         });
       } catch (err) {
         developer.log('Error suscribiéndose a ordenes por diseñador: $err');
@@ -678,8 +704,14 @@ class PocketBaseService {
     initSub();
 
     controller.onCancel = () {
-      pb.collection('ordenes').unsubscribe('*');
-      controller.close();
+      try {
+        pb.collection('ordenes').unsubscribe('*');
+      } catch (err) {
+        developer.log('Error cancelando suscripción (diseñador): $err');
+      }
+      if (!controller.isClosed) {
+        controller.close();
+      }
     };
 
     return controller.stream;
@@ -724,5 +756,125 @@ class PocketBaseService {
       developer.log('Error obteniendo diseñadores: $e');
       return [];
     }
+  }
+
+  // ====== RECORDATORIOS (Agenda) ======
+
+  Future<void> crearRecordatorio({
+    required String titulo,
+    required String descripcion,
+    required DateTime fecha,
+    required String disenadorId,
+  }) async {
+    try {
+      final body = {
+        'titulo': titulo,
+        'descripcion': descripcion,
+        'fecha': fecha.toIso8601String(),
+        'disenador_id': disenadorId,
+        'completado': false,
+      };
+      await pb.collection('recordatorios').create(body: body);
+    } catch (e) {
+      developer.log('Error al crear recordatorio: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> actualizarEstadoRecordatorio(String id, bool completado) async {
+    try {
+      await pb.collection('recordatorios').update(id, body: {
+        'completado': completado,
+      });
+    } catch (e) {
+      developer.log('Error actualizando recordatorio: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> eliminarRecordatorio(String id) async {
+    try {
+      await pb.collection('recordatorios').delete(id);
+    } catch (e) {
+      developer.log('Error eliminando recordatorio: $e');
+      rethrow;
+    }
+  }
+
+  Stream<List<Recordatorio>> listenRecordatorios(DateTime diaSeleccionado) {
+    final controller = StreamController<List<Recordatorio>>();
+
+    Future<void> fetchRecordatorios() async {
+      try {
+        final disenadorId = pb.authStore.model?.id ?? '';
+        
+        final res = await pb.collection('recordatorios').getFullList();
+
+        var recordatorios = res.map((r) {
+          return Recordatorio.fromRecord({
+            ...r.data,
+            'id': r.id,
+          });
+        }).toList();
+
+        // Filtro local por diseñador y fecha
+        recordatorios = recordatorios.where((rec) {
+          if (rec.disenadorId != disenadorId) return false;
+          
+          final localDate = rec.fecha.toLocal();
+          return localDate.year == diaSeleccionado.year &&
+                 localDate.month == diaSeleccionado.month &&
+                 localDate.day == diaSeleccionado.day;
+        }).toList();
+
+        // Ordenar por completado y luego por fecha de creación (id) o título
+        recordatorios.sort((a, b) {
+          if (a.completado && !b.completado) return 1;
+          if (!a.completado && b.completado) return -1;
+          return a.titulo.compareTo(b.titulo);
+        });
+
+        if (!controller.isClosed) {
+          controller.add(recordatorios);
+        }
+      } catch (e) {
+        if (!controller.isClosed) {
+          controller.addError(e);
+        }
+      }
+    }
+
+    fetchRecordatorios();
+
+    Future<void> initSub() async {
+      try {
+        await pb.collection('recordatorios').unsubscribe('*');
+        await pb.collection('recordatorios').subscribe('*', (e) {
+          try {
+            if (!controller.isClosed) {
+              fetchRecordatorios();
+            }
+          } catch (err) {
+            developer.log('Error en callback recordatorios: $err');
+          }
+        });
+      } catch (err) {
+        developer.log('Error suscribiéndose a recordatorios: $err');
+      }
+    }
+    initSub();
+
+    controller.onCancel = () {
+      try {
+        pb.collection('recordatorios').unsubscribe('*');
+      } catch (err) {
+        developer.log('Error cancelando recordatorios: $err');
+      }
+      if (!controller.isClosed) {
+        controller.close();
+      }
+    };
+
+    return controller.stream;
   }
 }

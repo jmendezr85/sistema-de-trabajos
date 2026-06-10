@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:pocketbase/pocketbase.dart';
 import '../../services/pb_service.dart';
 import '../../services/auth_provider.dart';
+import '../../services/theme_provider.dart';
 import '../../models/orden_model.dart';
 import '../auth/login_view.dart';
 import 'formulario_pos_view.dart';
@@ -36,6 +37,9 @@ class _DesignerDashboardViewState extends State<DesignerDashboardView> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark = themeProvider.isDarkMode;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Área de Diseño'),
@@ -71,6 +75,11 @@ class _DesignerDashboardViewState extends State<DesignerDashboardView> {
             ),
           ),
           IconButton(
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+            tooltip: isDark ? 'Modo Claro' : 'Modo Oscuro',
+            onPressed: () => themeProvider.toggleTheme(),
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Cerrar Sesión',
             onPressed: () => _logout(context),
@@ -78,72 +87,575 @@ class _DesignerDashboardViewState extends State<DesignerDashboardView> {
           const SizedBox(width: 8),
         ],
       ),
-      body: StreamBuilder<List<Orden>>(
-        stream: _pbService.listenOrdenesPorDisenador(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
+      body: Row(
+        children: [
+          // Left side: Órdenes
+          Expanded(
+            flex: 2,
+            child: StreamBuilder<List<Orden>>(
+              stream: _pbService.listenOrdenesPorDisenador(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 48, color: Colors.red[400]),
-                  const SizedBox(height: 16),
-                  Text('Error: ${snapshot.error}'),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () => setState(() {}),
-                    child: const Text('Reintentar'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          final authModel = _pbService.pb.authStore.model as RecordModel?;
-          final userId = authModel?.id ?? '';
-          final userName = authModel?.getStringValue('name') ?? '';
-
-          final todasLasOrdenes = snapshot.data ?? [];
-          final ordenes = todasLasOrdenes.where((orden) {
-            final isAssignedToMe = (orden.disenador == userId || orden.disenador == userName);
-            final isValidState = orden.estadoDiseno == 'Asignado' || orden.estadoDiseno == 'En Proceso';
-            return isAssignedToMe && isValidState;
-          }).toList();
-
-          if (ordenes.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No hay órdenes asignadas',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.grey[500],
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 48, color: Colors.red[400]),
+                        const SizedBox(height: 16),
+                        Text('Error: ${snapshot.error}'),
+                        const SizedBox(height: 24),
+                        ElevatedButton(
+                          onPressed: () => setState(() {}),
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
                     ),
+                  );
+                }
+
+                final authModel = _pbService.pb.authStore.model as RecordModel?;
+                final userId = authModel?.id ?? '';
+                final userName = authModel?.getStringValue('name') ?? '';
+
+                final todasLasOrdenes = snapshot.data ?? [];
+                final ordenes = todasLasOrdenes.where((orden) {
+                  final isAssignedToMe = (orden.disenador == userId || orden.disenador == userName);
+                  final isValidState = orden.estadoDiseno == 'Asignado' || orden.estadoDiseno == 'En Proceso';
+                  return isAssignedToMe && isValidState;
+                }).toList();
+
+                if (ordenes.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No hay órdenes asignadas',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: ordenes.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final orden = ordenes[index];
+                    return _OrdenCard(orden: orden, pbService: _pbService);
+                  },
+                );
+              },
+            ),
+          ),
+          
+          // Right side: Agenda
+          const VerticalDivider(width: 1, thickness: 1),
+          Container(
+            width: 350,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+            child: _AgendaPanel(pbService: _pbService),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgendaPanel extends StatefulWidget {
+  final PocketBaseService pbService;
+
+  const _AgendaPanel({required this.pbService});
+
+  @override
+  State<_AgendaPanel> createState() => _AgendaPanelState();
+}
+
+class _AgendaPanelState extends State<_AgendaPanel> {
+  DateTime _diaSeleccionado = DateTime.now();
+
+  void _cambiarDia(int dias) {
+    setState(() {
+      _diaSeleccionado = _diaSeleccionado.add(Duration(days: dias));
+    });
+  }
+
+  Future<void> _seleccionarFecha() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _diaSeleccionado,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null && picked != _diaSeleccionado) {
+      setState(() {
+        _diaSeleccionado = picked;
+      });
+    }
+  }
+
+  void _mostrarFormulario() {
+    showDialog(
+      context: context,
+      builder: (ctx) => _FormularioRecordatorio(
+        pbService: widget.pbService,
+        fechaInicial: _diaSeleccionado,
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final today = DateTime.now();
+    final tomorrow = today.add(const Duration(days: 1));
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    if (date.year == today.year && date.month == today.month && date.day == today.day) {
+      return 'Hoy';
+    } else if (date.year == tomorrow.year && date.month == tomorrow.month && date.day == tomorrow.day) {
+      return 'Mañana';
+    } else if (date.year == yesterday.year && date.month == yesterday.month && date.day == yesterday.day) {
+      return 'Ayer';
+    } else {
+      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Agenda Header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: () => _cambiarDia(-1),
+                tooltip: 'Día anterior',
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Column(
+                    children: [
+                      Text(
+                        'Mi Agenda',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _formatDate(_diaSeleccionado),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.calendar_month),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    onPressed: _seleccionarFecha,
+                    tooltip: 'Elegir fecha',
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(8),
                   ),
                 ],
               ),
-            );
-          }
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: () => _cambiarDia(1),
+                tooltip: 'Día siguiente',
+              ),
+            ],
+          ),
+        ),
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: ordenes.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final orden = ordenes[index];
-              return _OrdenCard(orden: orden, pbService: _pbService);
+        // Recordatorios List
+        Expanded(
+          child: StreamBuilder<List<dynamic>>(
+            // Usamos dynamic porque Recordatorio está en otro archivo, lo importaremos arriba en el archivo completo en un momento.
+            stream: widget.pbService.listenRecordatorios(_diaSeleccionado),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (snapshot.hasError) {
+                return const Center(child: Text('Error al cargar agenda'));
+              }
+
+              final recordatorios = snapshot.data ?? [];
+
+              if (recordatorios.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.event_available, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Día libre de tareas',
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: recordatorios.length,
+                itemBuilder: (context, index) {
+                  final rec = recordatorios[index];
+                  return _RecordatorioCard(
+                    recordatorio: rec,
+                    pbService: widget.pbService,
+                  );
+                },
+              );
             },
-          );
+          ),
+        ),
+
+        // Bottom Add Button
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _mostrarFormulario,
+              icon: const Icon(Icons.add, size: 24),
+              label: const Text(
+                'Nuevo Recordatorio',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                elevation: 4,
+                shadowColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecordatorioCard extends StatelessWidget {
+  final dynamic recordatorio;
+  final PocketBaseService pbService;
+
+  const _RecordatorioCard({
+    required this.recordatorio,
+    required this.pbService,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bool completado = recordatorio.completado;
+
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: completado 
+              ? Colors.green.withValues(alpha: 0.3) 
+              : Theme.of(context).dividerColor.withValues(alpha: 0.1),
+        ),
+      ),
+      color: completado 
+          ? Colors.green.withValues(alpha: 0.05) 
+          : Theme.of(context).cardColor,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          pbService.actualizarEstadoRecordatorio(recordatorio.id, !completado);
         },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                completado ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: completado ? Colors.green : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      recordatorio.titulo,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        decoration: completado ? TextDecoration.lineThrough : null,
+                        color: completado 
+                            ? Theme.of(context).colorScheme.onSurfaceVariant 
+                            : Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    if (recordatorio.descripcion.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        recordatorio.descripcion,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: completado 
+                              ? Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5) 
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                color: Theme.of(context).colorScheme.error.withValues(alpha: 0.8),
+                onPressed: () {
+                  pbService.eliminarRecordatorio(recordatorio.id);
+                },
+                tooltip: 'Eliminar tarea',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FormularioRecordatorio extends StatefulWidget {
+  final PocketBaseService pbService;
+  final DateTime fechaInicial;
+
+  const _FormularioRecordatorio({
+    required this.pbService,
+    required this.fechaInicial,
+  });
+
+  @override
+  State<_FormularioRecordatorio> createState() => _FormularioRecordatorioState();
+}
+
+class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
+  final _tituloCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  bool _guardando = false;
+
+  Future<void> _guardar() async {
+    if (_tituloCtrl.text.trim().isEmpty) return;
+
+    setState(() => _guardando = true);
+    try {
+      final authModel = widget.pbService.pb.authStore.model as RecordModel?;
+      final disenadorId = authModel?.id ?? '';
+
+      await widget.pbService.crearRecordatorio(
+        titulo: _tituloCtrl.text.trim(),
+        descripcion: _descCtrl.text.trim(),
+        fecha: widget.fechaInicial,
+        disenadorId: disenadorId,
+      );
+
+      if (mounted) {
+        Navigator.pop(context); // Cierra el formulario
+        _mostrarAlertaExito(context); // Muestra la alerta elegante
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  void _mostrarAlertaExito(BuildContext context) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, anim1, anim2) {
+        return const SizedBox();
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(
+            parent: anim1,
+            curve: Curves.easeOutBack,
+          ),
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            backgroundColor: Colors.white,
+            contentPadding: const EdgeInsets.all(32),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.check_circle_outline, color: Colors.green, size: 64),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  '¡Excelente!',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Recordatorio guardado en tu agenda',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Continuar', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 400,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.edit_calendar, color: Colors.blueAccent),
+                const SizedBox(width: 12),
+                Text(
+                  'Nuevo Recordatorio',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _tituloCtrl,
+              autofocus: true,
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+              decoration: InputDecoration(
+                labelText: '¿Qué necesitas recordar?',
+                labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              ),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _descCtrl,
+              maxLines: 3,
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+              decoration: InputDecoration(
+                labelText: 'Detalles adicionales (opcional)',
+                labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              ),
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _guardar(),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _guardando ? null : () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                const SizedBox(width: 12),
+                FilledButton(
+                  onPressed: _guardando ? null : _guardar,
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                  child: _guardando
+                      ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Guardar'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
