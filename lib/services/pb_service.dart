@@ -770,7 +770,7 @@ class PocketBaseService {
       final body = {
         'titulo': titulo,
         'descripcion': descripcion,
-        'fecha': fecha.toIso8601String(),
+        'fecha': fecha.toUtc().toIso8601String(),
         'disenador_id': disenadorId,
         'completado': false,
       };

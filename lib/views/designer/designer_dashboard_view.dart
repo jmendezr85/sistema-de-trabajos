@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:async';
 import 'package:pocketbase/pocketbase.dart';
 import '../../services/pb_service.dart';
 import '../../services/auth_provider.dart';
 import '../../services/theme_provider.dart';
 import '../../models/orden_model.dart';
+import '../../models/recordatorio_model.dart';
 import '../auth/login_view.dart';
 import 'formulario_pos_view.dart';
 
@@ -185,6 +187,208 @@ class _AgendaPanel extends StatefulWidget {
 
 class _AgendaPanelState extends State<_AgendaPanel> {
   DateTime _diaSeleccionado = DateTime.now();
+  List<dynamic> _recordatoriosSincronizados = [];
+  final Set<String> _alertasDisparadas = {};
+  Timer? _alertaTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _alertaTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+      if (mounted) _verificarAlarmas();
+    });
+  }
+
+  @override
+  void dispose() {
+    _alertaTimer?.cancel();
+    super.dispose();
+  }
+
+  void _verificarAlarmas() {
+    if (!mounted) return;
+    
+    final ahora = DateTime.now();
+
+    for (final dynamic tarea in _recordatoriosSincronizados) {
+      final bool completado = (tarea is Recordatorio) ? tarea.completado : (tarea['completado'] == true);
+      if (completado) continue;
+      
+      DateTime horaRec;
+      try {
+        horaRec = DateTime.parse(tarea['fecha'] ?? tarea.getStringValue('fecha')).toLocal();
+      } catch (_) {
+        horaRec = (tarea is Recordatorio) ? tarea.fecha.toLocal() : DateTime.now();
+      }
+      
+      final coincideEstricto = ahora.year == horaRec.year && 
+                               ahora.month == horaRec.month && 
+                               ahora.day == horaRec.day && 
+                               ahora.hour == horaRec.hour && 
+                               ahora.minute == horaRec.minute;
+      
+      final String id = (tarea is Recordatorio) ? tarea.id : (tarea['id']?.toString() ?? '');
+      
+      if (coincideEstricto && !_alertasDisparadas.contains(id)) {
+         setState(() {
+           _alertasDisparadas.add(id);
+         });
+         _mostrarAlertaRecordatorio(tarea);
+      }
+    }
+  }
+
+  void _mostrarAlertaRecordatorio(dynamic tarea) {
+    if (!mounted) return;
+    
+    final String titulo = (tarea is Recordatorio) ? tarea.titulo : (tarea['titulo']?.toString() ?? '');
+    final String descripcion = (tarea is Recordatorio) ? tarea.descripcion : (tarea['descripcion']?.toString() ?? '');
+    
+    DateTime horaRec;
+    try {
+      horaRec = DateTime.parse(tarea['fecha'] ?? tarea.getStringValue('fecha')).toLocal();
+    } catch (_) {
+      horaRec = (tarea is Recordatorio) ? tarea.fecha.toLocal() : DateTime.now();
+    }
+    
+    final horaFormateada = TimeOfDay.fromDateTime(horaRec).format(context);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 450),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E2247),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFF3C677).withValues(alpha: 0.3),
+                blurRadius: 25,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 64,
+                height: 64,
+                child: Stack(
+                  children: [
+                    Align(
+                      alignment: Alignment.center,
+                      child: Icon(Icons.assignment_outlined, color: Color(0xFFF3C677), size: 48),
+                    ),
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 4, right: 4),
+                        child: Icon(Icons.notifications_active, color: Color(0xFFF3C677), size: 24),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'RECORDATORIO DE TAREA PRÓXIMA',
+                style: TextStyle(
+                  color: Color(0xFFFFE0A5),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                titulo,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A2E5D),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'FECHA LÍMITE: $horaFormateada',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (descripcion.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      const Divider(color: Colors.white24, height: 1),
+                      const SizedBox(height: 12),
+                      Text(
+                        descripcion,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(30),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFF3C677), Color(0xFFC79542)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: ElevatedButton(
+                  onPressed: () {
+                    if (mounted) {
+                      Navigator.pop(ctx);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  ),
+                  child: const Text(
+                    'Entendido, gracias',
+                    style: TextStyle(
+                      color: Color(0xFF0D1128),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   void _cambiarDia(int dias) {
     setState(() {
@@ -300,10 +504,13 @@ class _AgendaPanelState extends State<_AgendaPanel> {
 
         // Recordatorios List
         Expanded(
-          child: StreamBuilder<List<dynamic>>(
-            // Usamos dynamic porque Recordatorio está en otro archivo, lo importaremos arriba en el archivo completo en un momento.
+          child: StreamBuilder<List<Recordatorio>>(
             stream: widget.pbService.listenRecordatorios(_diaSeleccionado),
             builder: (context, snapshot) {
+              if (snapshot.hasData) {
+                _recordatoriosSincronizados = snapshot.data!;
+              }
+
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
@@ -384,6 +591,61 @@ class _RecordatorioCard extends StatelessWidget {
     required this.pbService,
   });
 
+  void _mostrarDetalles(BuildContext context) {
+    final horaLocal = recordatorio.fecha.toLocal();
+    final horaFormateada = TimeOfDay.fromDateTime(horaLocal).format(context);
+    final fechaFormateada = '${horaLocal.day.toString().padLeft(2, '0')}/${horaLocal.month.toString().padLeft(2, '0')}/${horaLocal.year}';
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.event_note, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 12),
+            const Expanded(child: Text('Detalle de Tarea', style: TextStyle(fontWeight: FontWeight.bold))),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(recordatorio.titulo, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Text('$fechaFormateada - $horaFormateada', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
+              ],
+            ),
+            if (recordatorio.descripcion.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Divider(color: Theme.of(context).colorScheme.outlineVariant),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(recordatorio.descripcion, style: const TextStyle(fontSize: 15)),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx), 
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool completado = recordatorio.completado;
@@ -404,20 +666,24 @@ class _RecordatorioCard extends StatelessWidget {
           : Theme.of(context).cardColor,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          pbService.actualizarEstadoRecordatorio(recordatorio.id, !completado);
-        },
+        onTap: () => _mostrarDetalles(context),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(
-                completado ? Icons.check_circle : Icons.radio_button_unchecked,
-                color: completado ? Colors.green : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                size: 24,
+              IconButton(
+                icon: Icon(
+                  completado ? Icons.check_circle : Icons.radio_button_unchecked,
+                  color: completado ? Colors.green : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  size: 24,
+                ),
+                onPressed: () {
+                  pbService.actualizarEstadoRecordatorio(recordatorio.id, !completado);
+                },
+                tooltip: completado ? 'Desmarcar' : 'Marcar completado',
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 4),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -480,20 +746,71 @@ class _FormularioRecordatorio extends StatefulWidget {
 class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
   final _tituloCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
+  late DateTime _fechaSeleccionada;
+  TimeOfDay? _horaSeleccionada;
   bool _guardando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fechaSeleccionada = widget.fechaInicial;
+  }
+
+  Future<void> _seleccionarFecha() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _fechaSeleccionada,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        _fechaSeleccionada = picked;
+      });
+    }
+  }
+
+  Future<void> _seleccionarHora() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        _horaSeleccionada = picked;
+      });
+    }
+  }
 
   Future<void> _guardar() async {
     if (_tituloCtrl.text.trim().isEmpty) return;
+    if (_horaSeleccionada == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, selecciona la hora del recordatorio.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
     setState(() => _guardando = true);
     try {
       final authModel = widget.pbService.pb.authStore.model as RecordModel?;
       final disenadorId = authModel?.id ?? '';
+      
+      final fechaFinal = DateTime(
+        _fechaSeleccionada.year,
+        _fechaSeleccionada.month,
+        _fechaSeleccionada.day,
+        _horaSeleccionada!.hour,
+        _horaSeleccionada!.minute,
+      );
 
       await widget.pbService.crearRecordatorio(
         titulo: _tituloCtrl.text.trim(),
         descripcion: _descCtrl.text.trim(),
-        fecha: widget.fechaInicial,
+        fecha: fechaFinal,
         disenadorId: disenadorId,
       );
 
@@ -632,6 +949,54 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
               ),
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _guardar(),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _seleccionarFecha,
+                    icon: const Icon(Icons.calendar_month),
+                    label: Text(
+                      '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/${_fechaSeleccionada.month.toString().padLeft(2, '0')}/${_fechaSeleccionada.year}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: BorderSide(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _seleccionarHora,
+                    icon: const Icon(Icons.access_time),
+                    label: Text(
+                      _horaSeleccionada != null
+                          ? _horaSeleccionada!.format(context)
+                          : 'Hora Exacta',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: BorderSide(
+                        color: _horaSeleccionada != null 
+                            ? Theme.of(context).colorScheme.primary 
+                            : Theme.of(context).colorScheme.outline,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 24),
             Row(

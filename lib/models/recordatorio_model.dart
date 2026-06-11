@@ -20,7 +20,7 @@ class Recordatorio {
       id: record['id'] ?? '',
       titulo: record['titulo'] ?? '',
       descripcion: record['descripcion'] ?? '',
-      fecha: DateTime.tryParse(record['fecha'] ?? '') ?? DateTime.now(),
+      fecha: DateTime.tryParse(record['fecha']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
       disenadorId: record['disenador_id'] ?? '',
       completado: record['completado'] == true,
     );
